@@ -8,6 +8,7 @@ if __name__ == '__main__':
 	arg_parser = argparse.ArgumentParser(description='Automatically rename and move a downloaded TV show')
 	arg_parser.add_argument('--dest', nargs=1, help='The destination directory')
 	arg_parser.add_argument('--file', nargs=1, help='The filename of the TV show to move')
+	arg_parser.add_argument('--title', nargs='+', help='Optionally hint the title of the show')
 	args = arg_parser.parse_args(sys.argv[1:])
 
 	dest = ''.join(args.dest)
@@ -16,15 +17,19 @@ if __name__ == '__main__':
 	filename = fullpath[-1]
 	filepath = ''.join(fullpath[0:-1])
 
-	mindist = None
-	bestMatch = ""
-	for file in os.listdir(dest):
-		match = editDistance(filename, file)
-		if match < mindist or mindist is None:
-			mindist = match
-			bestMatch = file
+	if not args.title:
+		mindist = None
+		bestMatch = ""
+		for file in os.listdir(dest):
+			match = editDistance(filename, file)
+			if match < mindist or mindist is None:
+				mindist = match
+				bestMatch = file
+	else:
+		bestMatch = ''.join(args.title)
 	
 	reg = re.compile("s(\d+)e(\d+)", flags=re.IGNORECASE)
+	print "FILENAME:>%s<" % filename
 	pattern = reg.search(filename)
 	extension = filename.split('.')[-1]
 	ref = pattern.groups()
@@ -36,10 +41,9 @@ if __name__ == '__main__':
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
 
 	destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
-	print "I want to move the input file to %s" % destination
 	
 	while True:
-		yn = raw_input("Should I do this? ")
+		yn = raw_input("Move %s to  %s?" % (filename, destination))
 		
 		if (yn == 'y'):
 			rename = True
@@ -51,7 +55,7 @@ if __name__ == '__main__':
 			rename = False
 			print "Please answer 'y' or 'n'"
 
-	if rename
+	if rename:
 		os.rename('/'.join(fullpath), destination)	
 	else:
 		print "Ok... doing nothing"
