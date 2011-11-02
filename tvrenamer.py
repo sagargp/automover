@@ -78,11 +78,6 @@ class EpGuidesSearch(object):
 		append = True
 		results = []
 
-		f = open("episodes.out", 'w')
-		import pickle
-		pickle.dump(self.__eps__, f)
-		f.close()
-
 		for episode in self.__eps__:
 			if season:
 				if episode['season'] == season:
