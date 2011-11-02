@@ -35,8 +35,11 @@ if __name__ == '__main__':
 	result = show.search(season, episode)
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
 
+	destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
+	print "I want to move the input file to %s" % destination
+	
 	while True:
-		yn = raw_input("I think the input file should be called %s. Is this right? " % newname)
+		yn = raw_input("Should I do this? ")
 		
 		if (yn == 'y'):
 			rename = True
@@ -48,21 +51,7 @@ if __name__ == '__main__':
 			rename = False
 			print "Please answer 'y' or 'n'"
 
-	while True and rename:
-		yn = raw_input("Should I move it to %s/%s/Season %s? " % (dest, bestMatch, season))
-		
-		if (yn == 'y'):
-			move = True
-			break
-		elif (yn == 'n'):
-			move = False
-			break
-		else:
-			move = False
-			print "Please answer 'y' or 'n'"
-	
-	if rename and move:
-		destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
+	if rename
 		os.rename('/'.join(fullpath), destination)	
 	else:
 		print "Ok... doing nothing"
