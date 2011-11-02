@@ -29,7 +29,6 @@ if __name__ == '__main__':
 		bestMatch = ''.join(args.title)
 	
 	reg = re.compile("s(\d+)e(\d+)", flags=re.IGNORECASE)
-	print "FILENAME:>%s<" % filename
 	pattern = reg.search(filename)
 	extension = filename.split('.')[-1]
 	ref = pattern.groups()
@@ -37,13 +36,14 @@ if __name__ == '__main__':
 	episode = ref[1].lstrip('0')
 
 	show = T.EpGuidesSearch(bestMatch)
+
 	result = show.search(season, episode)
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
 
 	destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
 	
 	while True:
-		yn = raw_input("Move %s to  %s?" % (filename, destination))
+		yn = raw_input("Move %s to  %s? " % (filename, destination))
 		
 		if (yn == 'y'):
 			rename = True
