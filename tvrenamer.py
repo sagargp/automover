@@ -1,39 +1,7 @@
 #!/usr/bin/python
 
 import sgmllib, urllib, json, re
-
-class EpGuideParser(sgmllib.SGMLParser):
-	
-	def __init__(self, verbose=0):
-		sgmllib.SGMLParser.__init__(self, verbose)
-		self.hyperlinks = []
-		self.epcsv = ''
-		self.inside_textarea = 0
-	
-	def parse(self, s):
-		self.feed(s)
-		self.close()
-	
-	def handle_data(self, data):
-		if self.inside_textarea:
-			self.epcsv = data
-	
-	def start_textarea(self, attributes):
-		self.inside_textarea = 1
-	
-	def end_textarea(self):
-		self.inside_textarea = 0
-	
-	def start_a(self, attributes):
-		for name, value in attributes:
-			if name == 'href':
-				self.hyperlinks.append(value)
-	
-	def get_hyperlinks(self):
-		return self.hyperlinks
-	
-	def get_eps_csv(self):
-		return self.epcsv.splitlines()
+from EpGuidesParser import EpGuidesParser
 
 class EpGuidesSearch(object):
 	
@@ -58,22 +26,23 @@ class EpGuidesSearch(object):
 
 		f = urllib.urlopen(self.__epguidesUrl__)
 
-		myparser = EpGuideParser()
+		myparser = EpGuidesParser()
 		myparser.parse(f.read())
 		f.close()
 
 		csv_link = ''
-
 		for link in myparser.get_hyperlinks():
 			if link.find("exportToCSV") > 0:
 				csv_link = link
 
 		f = urllib.urlopen(csv_link)
+		myparser.reset_data()
 		myparser.parse(f.read())
 		f.close()
 
 		eps_csv = myparser.get_eps_csv()
-		eps_csv.remove('')
+		if '' in eps_csv:
+			eps_csv.remove('')
 		eps = []
 
 		for i in range(0, len(eps_csv)):
@@ -108,6 +77,11 @@ class EpGuidesSearch(object):
 		
 		append = True
 		results = []
+
+		f = open("episodes.out", 'w')
+		import pickle
+		pickle.dump(self.__eps__, f)
+		f.close()
 
 		for episode in self.__eps__:
 			if season:
