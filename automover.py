@@ -4,18 +4,35 @@ from editDistance import editDistance
 
 if __name__ == '__main__':
 	import sys, os, argparse
+
+	def getYesNo(str):
+		while True:
+			yn = raw_input(str)
+			
+			if (yn == 'y'):
+				return True
+			elif (yn == 'n'):
+				return False	
+			else:
+				print "Please answer 'y' or 'n'"
 	
 	arg_parser = argparse.ArgumentParser(description='Automatically rename and move a downloaded TV show')
-	arg_parser.add_argument('--dest', nargs=1, help='The destination directory')
-	arg_parser.add_argument('--file', nargs=1, help='The filename of the TV show to move')
-	arg_parser.add_argument('--title', nargs='+', help='Optionally hint the title of the show')
+	arg_parser.add_argument('-d', '--dest', nargs=1, help='The destination directory')
+	arg_parser.add_argument('-f', '--file', nargs='+', help='The filename of the TV show to move')
+	arg_parser.add_argument('-t', '--title', nargs='+', help='Optionally hint the title of the show')
+	arg_parser.add_argument('-c', '--confirm', action='store_true', help='Ask before processing a file (for use in batch scripts)')
+	arg_parser.add_argument('-y', '--yes' , action='store_true', help='Answer yes to questions (except --confirm questions)')
 	args = arg_parser.parse_args(sys.argv[1:])
 
 	dest = ''.join(args.dest)
-	fullpath = ''.join(args.file)
+	fullpath = ' '.join(args.file)
 	fullpath = fullpath.split('/')
 	filename = fullpath[-1]
 	filepath = ''.join(fullpath[0:-1])
+
+	if args.confirm:
+		if not getYesNo("Process %s? " % filename):
+			exit()
 
 	if not args.title:
 		mindist = None
@@ -41,19 +58,8 @@ if __name__ == '__main__':
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
 
 	destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
-	
-	while True:
-		yn = raw_input("Move %s to  %s? " % (filename, destination))
-		
-		if (yn == 'y'):
-			rename = True
-			break
-		elif (yn == 'n'):
-			rename = False
-			break
-		else:
-			rename = False
-			print "Please answer 'y' or 'n'"
+
+	rename = getYesNo("Move %s to %s? " % (filename, destination))
 
 	if rename:
 		os.rename('/'.join(fullpath), destination)	
