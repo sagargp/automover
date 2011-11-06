@@ -1,16 +1,41 @@
-#!/usr/bin/python
-
 import sgmllib, urllib, json, re
 from EpGuidesParser import EpGuidesParser
-
-class EpGuidesSearch(object):
 	
-	def __init__(self, title, includeSpecials=False):
+class EpGuidesSearch(object):
+	def __init__(self, title, includeSpecials=False, cachefile='cache.p'):
 		self.__title__ = title
 		self.__eps__ = None
 		self.__includeSpecials__ = includeSpecials
+		self.__cachefile__ = cachefile
+
+		self.__cacheLoad__()
+
+	def __cacheWrite__(self):
+		import pickle
+		
+		print 'Writing cache...'
+		f = open(self.__cachefile__, 'w')
+		pickle.dump(self.__eps__, f)
 	
+	def __cacheLoad__(self):
+		import pickle
+
+		print 'Loading cache...',
+		
+		try:
+			f = open(self.__cachefile__, 'r')
+		except IOError:
+			return False 
+
+		self.__eps__ = pickle.load(f)
+		print '%d shows loaded.' % len(self.__eps__)
+		return True
+
 	def __getEpisodes__(self):
+		if self.__eps__ and self.__eps__.has_key(self.__title__):
+			print 'Using cache'
+			return self.__eps__
+
 		query = {"q": "allintitle: site:epguides.com %s" % self.__title__}
 		search_url = "http://ajax.googleapis.com/ajax/services/search/web?v=1.0&%s" % urllib.urlencode(query)
 
@@ -58,7 +83,7 @@ class EpGuidesSearch(object):
 
 			eps.append(row_dict)
 
-		return eps
+		return {self.__title__: eps}
 
 	def search(self, season, ep):
 		return self.__search__(season, ep)
@@ -78,7 +103,7 @@ class EpGuidesSearch(object):
 		append = True
 		results = []
 
-		for episode in self.__eps__:
+		for episode in self.__eps__[self.__title__]:
 			if season:
 				if episode['season'] == season:
 					if ep:
@@ -102,7 +127,7 @@ class EpGuidesSearch(object):
 
 	def getEpguidesURL(self):
 		if not self.__epguidesUrl__:
-			self.__getEpisodes__()
+			self.__eps__ = self.__getEpisodes__()
 
 		return self.__epguidesUrl__
 
@@ -110,35 +135,5 @@ class EpGuidesSearch(object):
 		if not self.__eps__:
 			self.__eps__ = self.__getEpisodes__()
 
+		self.__cacheWrite__()
 		return self.__eps__
-
-if __name__ == '__main__':
-	import sys, os, argparse
-	
-	arg_parser = argparse.ArgumentParser(description='Get episode info given a TV show name')
-	arg_parser.add_argument('--title', nargs='+',help='The title of the show')
-	arg_parser.add_argument('--filename', nargs=1, help='The filename')
-	arg_parser.add_argument('--directory', nargs=1, help='A directory')
-
-	args = arg_parser.parse_args(sys.argv[1:])
-
-	show = EpGuidesSearch(''.join(args.title))
-	mappings = []
-
-	files = os.listdir(''.join(args.directory))
-	reg = re.compile("s(\d+)e(\d+)", flags=re.IGNORECASE)
-
-	for file in files:
-		pattern = reg.search(file)
-		extension = file.split('.')[-1]
-		if pattern:
-			ref = pattern.groups()
-			season = ref[0].lstrip('0')
-			episode = ref[1].lstrip('0')
-			result = show.search(season, episode)
-
-			newname = "%s S%sE%s %s.%s" % (''.join(args.title), ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
-			mappings.append( [file, newname] )
-
-	for mapping in mappings:
-		print "%s \"%s\"" % (mapping[0], mapping[1])

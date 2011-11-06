@@ -1,9 +1,7 @@
-import re, os, sys
-import tvrenamer as T
-from editDistance import editDistance
-
 if __name__ == '__main__':
-	import sys, os, argparse
+	import re, os, sys, argparse
+	from EpGuidesSearch import EpGuidesSearch
+	from editDistance import editDistance
 
 	def getYesNo(str):
 		while True:
@@ -17,11 +15,11 @@ if __name__ == '__main__':
 				print "Please answer 'y' or 'n'"
 	
 	arg_parser = argparse.ArgumentParser(description='Automatically rename and move a downloaded TV show')
-	arg_parser.add_argument('-d', '--dest', nargs=1, help='The destination directory')
-	arg_parser.add_argument('-f', '--file', nargs='+', help='The filename of the TV show to move')
-	arg_parser.add_argument('-t', '--title', nargs='+', help='Optionally hint the title of the show')
-	arg_parser.add_argument('-c', '--confirm', action='store_true', help='Ask before processing a file (for use in batch scripts)')
-	arg_parser.add_argument('-y', '--yes' , action='store_true', help='Answer yes to questions (except --confirm questions)')
+	arg_parser.add_argument('--dest', nargs=1, help='The destination directory')
+	arg_parser.add_argument('--file', nargs='+', help='The filename of the TV show to move')
+	arg_parser.add_argument('--title', nargs='+', help='Optionally hint the title of the show')
+	arg_parser.add_argument('--confirm', action='store_true', help='Ask before processing a file (for use in batch scripts)')
+	arg_parser.add_argument('--yes' , action='store_true', help='Answer yes to questions (except --confirm questions)')
 	args = arg_parser.parse_args(sys.argv[1:])
 
 	dest = ''.join(args.dest)
@@ -52,7 +50,7 @@ if __name__ == '__main__':
 	season = ref[0].lstrip('0')
 	episode = ref[1].lstrip('0')
 
-	show = T.EpGuidesSearch(bestMatch)
+	show = EpGuidesSearch(bestMatch)
 
 	result = show.search(season, episode)
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
