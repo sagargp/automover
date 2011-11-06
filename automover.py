@@ -20,6 +20,7 @@ if __name__ == '__main__':
 	arg_parser.add_argument('--title', nargs='+', help='Optionally hint the title of the show')
 	arg_parser.add_argument('--confirm', action='store_true', help='Ask before processing a file (for use in batch scripts)')
 	arg_parser.add_argument('--yes' , action='store_true', help='Answer yes to questions (except --confirm questions)')
+	arg_parser.add_argument('--script', nargs='?', help='Write a move script instead of performing the moves')
 	args = arg_parser.parse_args(sys.argv[1:])
 
 	dest = ''.join(args.dest)
@@ -55,12 +56,29 @@ if __name__ == '__main__':
 	result = show.search(season, episode)
 	newname = "%s S%sE%s %s.%s" % (bestMatch, ref[0], ref[1], result[0]['title'].lstrip('"').rstrip('"'), extension)
 
-	destination = "%s/%s/Season %s/%s" % (dest, bestMatch, season, newname)
+	destinationpath = "%s/%s/Season %s" % (dest, bestMatch, season)
+	destination = "%s/%s" % (destinationpath, newname)
 
-	rename = getYesNo("Move %s to %s? " % (filename, destination))
+	if args.yes:
+		rename = True
+	else:
+		rename = getYesNo("Move %s to %s? " % (filename, destination))
 
 	if rename:
-		os.rename('/'.join(fullpath), destination)	
+		if args.script:
+			s = open(args.script, 'a')
+			cmd = '# %s' % newname 
+
+			if not os.path.isdir(destinationpath):
+				cmd = cmd + '\nmkdir -p "%s"' % destinationpath
+
+			cmd = cmd + '\nmv "%s" "%s"\n\n' % ('/'.join(fullpath), destination)
+			
+			s.write(cmd)
+		else:
+			if not os.path.isdir(destinationpath):
+				os.mkdir(destinationpath)
+			os.rename('/'.join(fullpath), destination)	
 	else:
 		print "Ok... doing nothing"
 
