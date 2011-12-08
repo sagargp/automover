@@ -1,5 +1,12 @@
-right now it outputs old name, new name pairs. eg:
+Modify the config file to your suitability, then run automover like so:
 
-$ tvrenamer.py --title "Mad Men" --directory /srv/media/television/Mad\ Men/Season\ 4
-Mad.Men.S04E02.720p.WEB-DL.AAC2.0.H.264-CtrlHD.mkv "Mad Men S04E02 Christmas Comes But Once a Year.mkv"
-...
+  $ automover --config automover.conf --script mover.sh --verbose .
+  $ ./mover.sh
+
+Make sure to check mover.sh before running it.
+
+Future plans:
+* also output an 'undo' script that unmoves the object
+* check that we're not overwriting any destination files, if so, utter a warning and back it up
+* handle formats like modern.family.302.hdtv.xvid-lol.avi
+
