@@ -4,15 +4,15 @@ if __name__ == '__main__':
   from editDistance import editDistance
   
   def getYesNo(str):
-		while True:
-			yn = raw_input(str)
-			
-			if (yn == 'y'):
-				return True
-			elif (yn == 'n'):
-				return False	
-			else:
-				print "Please answer 'y' or 'n'"
+    while True:
+      yn = raw_input(str)
+      
+      if (yn == 'y'):
+        return True
+      elif (yn == 'n'):
+        return False  
+      else:
+        print "Please answer 'y' or 'n'"
   
   argparser = argparse.ArgumentParser(description='Automatically rename and move TV shows')
   argparser.add_argument('searchpath', nargs=1, help='The file or directory to process')
