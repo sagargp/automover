@@ -106,6 +106,9 @@ if __name__ == '__main__':
         if args.script:
           s = open(args.script, 'a')
           cmd = '# %s' % newname
+          
+          if not destpathcache.has_key(destpath):
+            destpathcache[destpath] = False
 
           if not os.path.isdir(destpath) and not destpathcache[destpath]:
             cmd = cmd + '\nmkdir -p "%s"' % destpath
