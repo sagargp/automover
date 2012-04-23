@@ -1,5 +1,9 @@
-import sgmllib, urllib, json, re, time, socket
+import urllib
+import json
+import time
+import socket
 from EpGuidesParser import EpGuidesParser
+
 
 class EpGuidesSearch:
   def __init__(self, title, debugfile='debug.log', debug=False, verbose=False):
@@ -21,16 +25,17 @@ class EpGuidesSearch:
 
     if self.doDebug:
       self.debughandle.write(out)
-    
+
     if self.verbose:
       print out,
 
   def getEpisodes(self):
-    if self.cache.has_key(self.title):
+    if self.title in self.cache:
       self.debug('Returning cached data...')
       return self.cache[self.title]
 
-    query = {"q": "allintitle: site:epguides.com %s" % self.title, "userip": socket.gethostbyname(socket.gethostname())}
+    query = {"q": "allintitle: site:epguides.com %s" % self.title,
+             "userip": socket.gethostbyname(socket.gethostname())}
     search_url = "http://ajax.googleapis.com/ajax/services/search/web?v=1.0&%s" % urllib.urlencode(query)
 
     self.debug('Searching for show at %s' % search_url)
@@ -40,7 +45,7 @@ class EpGuidesSearch:
     results = json.loads(json_results)
     page.close()
 
-    if results['responseStatus'] == 200 and results['responseData']['cursor'].has_key('estimatedResultCount'):
+    if results['responseStatus'] == 200 and 'estimatedResultCount' in results['responseData']['cursor']:
       self.epguides_url = results['responseData']['results'][0]['url']
     else:
       self.debug('Show not found! Dumping search results object:')
@@ -62,9 +67,10 @@ class EpGuidesSearch:
         break
 
     if csv_link == '':
-      self.debug('Error! Can\'t find CSV listing for %s at %s! Bailing out...' % (self.title, self.epguides_url))
+      self.debug('Error! Can\'t find CSV listing for %s at %s! Bailing out...' % (self.title,
+                                                                                  self.epguides_url))
       return None
-   
+
     self.debug('Downloading show data...')
     page = urllib.urlopen(csv_link)
     parser.reset_data()
@@ -86,7 +92,7 @@ class EpGuidesSearch:
 
       for key in range(0, len(headers)):
         rowdict[headers[key]] = row[key]
-      
+
       eps.append(rowdict)
 
     self.debug('Done')
@@ -95,10 +101,10 @@ class EpGuidesSearch:
 
   def search(self, season, ep):
     results = []
-    
+
     if self.getEpisodes():
       for episode in self.cache[self.title]:
         if episode['season'] == season and episode['episode'] == ep:
           results.append(episode)
-    
+
     return results
