@@ -44,5 +44,5 @@ By default, Automover will search subdirectories of `searchpath` for files match
 **Future plans:**
 
 * Output an 'undo' script that unmoves the object.
-* Check that we're not overwriting any destination files, and if so, utter a warning and back it up.
+* ~~Check that we're not overwriting any destination files, and if so, utter a warning and back it up.~~ Done! Using mv -vb
 * ~~Handle formats like modern.family.302.hdtv.xvid-lol.avi~~ Done!
