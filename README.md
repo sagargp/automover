@@ -4,9 +4,8 @@ By default, Automover will search subdirectories of `searchpath` for files match
 
 ---
 
-    usage: automover.py [-h] [--conf CONF] [--confirm] [--debug DEBUG]
-                        [--forcetitle FORCETITLE] [--inplace] [--read]
-                        [--script [SCRIPT]] [--verbose]
+    usage: automover.py [-h] [--conf CONF] [--read] [--script [SCRIPT]]
+                        [--verbose] [--hint HINT [HINT ...]]
                         searchpath
     
     Automatically rename and move TV shows
@@ -17,27 +16,25 @@ By default, Automover will search subdirectories of `searchpath` for files match
     optional arguments:
       -h, --help            show this help message and exit
       --conf CONF           Path to the config file
-      --confirm             Ask before doing anything
-      --debug DEBUG         Write output to a debug files
-      --forcetitle FORCETITLE
-                            Force a TV show match
-      --inplace             Rename files in place
       --read                Take filenames from STDIN
       --script [SCRIPT]     Write a bash script
       --verbose             Verbose output
-
+      --hint HINT [HINT ...]
+                            Give a hint to the file name, if it isn't in the
+                            destination location.
+    
 ---
 
 **Examples:**
 
-    $ automover --script move.sh
-    $ sh mover.sh
+    $ automover . --verbose --script move.sh
+    $ sh move.sh
 ---
     $ find . -iname "Arrested Development*.avi" -not -iname "*sample*" | \
-    automover --script move.sh --forcetitle ArrestedDevelopment --read
-    $ sh mover.sh
+    automover --script move.sh --read --hint Arrested Development
+    $ sh move.sh
 
-**Make sure to check mover.sh for errors before running it!**
+**Make sure to check move.sh for errors before running it!**
 
 ---
 
@@ -46,3 +43,4 @@ By default, Automover will search subdirectories of `searchpath` for files match
 * Output an 'undo' script that unmoves the object.
 * ~~Check that we're not overwriting any destination files, and if so, utter a warning and back it up.~~ Done! Using mv -vb
 * ~~Handle formats like modern.family.302.hdtv.xvid-lol.avi~~ Done!
+
