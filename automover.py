@@ -153,7 +153,7 @@ if __name__ == '__main__':
     debug.out('Initializing caches')
     showcache = dict()
     titlecache = dict()
-    destpathcache = dict()
+  destpathcache = dict()
 
   # prepare the list of files to rename
   filelist = []
