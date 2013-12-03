@@ -1,14 +1,31 @@
+import pickle
+import re
+import os
+import sys
+import argparse
+import ConfigParser
+from time import ctime
 from editDistance import editDistance
 from EpGuidesSearch import EpGuidesSearch
-from time import ctime
 
-class DebugPrinter:
+class Debug:
   def __init__(self, verbose):
     self.verbose = verbose
-  
-  def out(self, string):
+
+  def out(self, verbose, kind, string):
+    debug_message = "%s -- %s -- %s" % (ctime(), kind, string)
+
     if self.verbose:
-      print '%s -- %s\n' % (ctime(), string),
+      print debug_message
+
+  def info(self, string):
+    self.out(self.verbose, "INFO", string)
+
+  def warn(self, string):
+    self.out(self.verbose, "WARN", string)
+
+  def __call__(self, *args, **kwargs):
+    self.info(*args, **kwargs)
 
 class automover:
   def __init__(self, args, debug, dictionary):
@@ -64,93 +81,62 @@ class automover:
     result = show.search(season, episode)
 
     if len(result) == 0 or dist > 3:
-      self.debug.out('No results for %s Season %s episode %s' % (bestMatch, season, episode))
+      self.debug.warn("No results for %s Season %s episode %s" % (bestMatch, season, episode))
       return None
     else:
-      newname = "%s S%02dE%02d %s.%s" % (bestMatch,
-                                         int(season),
-                                         int(episode),
-                                         result[0]['title'].strip('"'),
-                                         groups[-1])
-
-      destpath = "%s/%s/Season %s" % (dest, bestMatch, season)
+      newname     = "%s S%02dE%02d %s.%s" % (bestMatch, int(season), int(episode), result[0]['title'].strip('"'), groups[-1])
+      destpath    = "%s/%s/Season %s" % (dest, bestMatch, season)
       destination = "%s/%s" % (destpath, newname)
 
     fullpath = '/'.join([root, file])
+
     return bestMatch, fullpath, destpath, destination
 
+## Main
 if __name__ == '__main__':
-  import pickle
-  import re
-  import os
-  import sys
-  import argparse
-  import ConfigParser
-
-  argparser = argparse.ArgumentParser(
-    description='Automatically rename and move TV shows')
-
-  argparser.add_argument('searchpath',
-                         nargs=1,
-                         help='The file or directory to process')
-
-  argparser.add_argument('--conf',
-                         nargs=1,
-                         help='Path to the config file',
-                         default='/etc/automover.conf')
-
-  argparser.add_argument('--read',
-                         action='store_true',
-                         help='Take filenames from STDIN')
-
-  argparser.add_argument('--script',
-                         nargs='?',
-                         default='move.sh',
-                         help='Write a bash script')
-
-  argparser.add_argument('--verbose',
-                         action='store_true',
-                         help='Verbose output')
-
-  argparser.add_argument('--hint',
-                         nargs='+',
-                         help='Give a hint to the file name, if it isn\'t in the destination location.')
-
+  argparser = argparse.ArgumentParser(description="Automatically rename and move TV shows")
+  argparser.add_argument("searchpath", nargs=1, help="The file or directory to process")
+  argparser.add_argument("--conf", nargs=1, default="/etc/automover.conf", help="Path to the config file")
+  argparser.add_argument("--read", action="store_true", help="Take filenames from STDIN") 
+  argparser.add_argument("--script", nargs="?", default="automover.sh", help="Write a bash script")
+  argparser.add_argument("--verbose", action="store_true", help="Verbose output") 
+  argparser.add_argument("--hint", nargs="+", help="Give a hint to the file name, if it isn't in the destination location")
+  argparser.add_argument("--logfile", nargs="?", default="automover.log", help="Debug logfile")
   args = argparser.parse_args(sys.argv[1:])
+
 
   # parse the config file and grab settings from it
   config = ConfigParser.RawConfigParser()
   config.read(args.conf)
 
-  patterns = [x for x in config.options('patterns') if x.startswith('pattern')]
-  dest = config.get('main', 'destination')
+  patterns     = [x for x in config.options('patterns') if x.startswith('pattern')]
+  dest         = config.get('main', 'destination')
   pattern_regs = [re.compile(config.get('patterns', x), flags=re.IGNORECASE) for x in patterns]
-  exc = re.compile(config.get('patterns', 'exclude'), flags=re.IGNORECASE)
+  exc          = re.compile(config.get('patterns', 'exclude'), flags=re.IGNORECASE)
 
   #
   path = args.searchpath[0]
 
   # Build a "dictionary" of TV show names. This is used later to look up names.
-  dictionary = []
-  for file in os.listdir(dest):
-    dictionary.append(file)
+  dictionary = [f for f in os.listdir(dest)]
 
+  # Add the hint as a key in the dictionary so that the algorithm will find it for sure
   if args.hint is not None:
     dictionary.append(' '.join(args.hint))
 
   # initialize the debug printer
-  debug = DebugPrinter(args.verbose)
+  debug = Debug(args.verbose)
 
   # initialize the automover object
   automover = automover(args, debug, dictionary)
 
   # prepare the caches
   try:
-    file = open('caches.pyo', 'r')
-    showcache, titlecache = pickle.load(file)
-    file.close()
+    cachefile = open('caches.pyo', 'r')
+    showcache, titlecache = pickle.load(cachefile)
+    cachefile.close()
   except:
-    debug.out('Initializing caches')
+    debug('Initializing caches')
     showcache = dict()
     titlecache = dict()
   destpathcache = dict()
@@ -172,6 +158,8 @@ if __name__ == '__main__':
   shows = dict()
   for root, file in filelist:
     move = automover.doRename(root, file)
+    debug(move)
+
     if move is not None:
       title, fullpath, destpath, destination = move
 
@@ -201,6 +189,6 @@ if __name__ == '__main__':
 
   script.close()
 
-  file = open('caches.pyo', 'w')
-  pickle.dump((showcache, titlecache), file)
-  file.close()
+  cachefile = open('caches.pyo', 'w')
+  pickle.dump((showcache, titlecache), cachefile)
+  cachefile.close()

@@ -10,18 +10,18 @@ class EpGuidesSearch:
     self.debug = debug
 
     self.cache = dict()
-    self.debug.out('Show name: %s' % title)
+    self.debug('Show name: %s' % title)
 
   def getEpisodes(self):
     if self.title in self.cache:
-      self.debug.out('Returning cached data...')
+      self.debug('Returning cached data...')
       return self.cache[self.title]
 
     query = {"q": "allintitle: site:epguides.com %s" % self.title,
              "userip": socket.gethostbyname(socket.gethostname())}
     search_url = "http://ajax.googleapis.com/ajax/services/search/web?v=1.0&%s" % urllib.urlencode(query)
 
-    self.debug.out('Searching for show at %s' % search_url)
+    self.debug('Searching for show at %s' % search_url)
 
     page = urllib.urlopen(search_url)
     json_results = page.read()
@@ -31,12 +31,12 @@ class EpGuidesSearch:
     if results['responseStatus'] == 200 and 'estimatedResultCount' in results['responseData']['cursor']:
       self.epguides_url = results['responseData']['results'][0]['url']
     else:
-      self.debug.out('Show not found! Dumping search results object:')
-      self.debug.out(results)
-      self.debug.out('<<<')
+      self.debug('Show not found! Dumping search results object:')
+      self.debug(results)
+      self.debug('<<<')
       return None
 
-    self.debug.out('Looking for CSV listing at %s' % self.epguides_url)
+    self.debug('Looking for CSV listing at %s' % self.epguides_url)
     page = urllib.urlopen(self.epguides_url)
 
     parser = EpGuidesParser()
@@ -50,11 +50,11 @@ class EpGuidesSearch:
         break
 
     if csv_link == '':
-      self.debug.out('Error! Can\'t find CSV listing for %s at %s! Bailing out...' % (self.title,
+      self.debug('Error! Can\'t find CSV listing for %s at %s! Bailing out...' % (self.title,
                                                                                   self.epguides_url))
       return None
 
-    self.debug.out('Downloading show data...')
+    self.debug('Downloading show data...')
     page = urllib.urlopen(csv_link)
     parser.reset_data()
     parser.parse(page.read())
@@ -80,9 +80,10 @@ class EpGuidesSearch:
       for key in range(0, len(headers)):
         rowdict[headers[key]] = row[key]
 
+      self.debug(rowdict)
       eps.append(rowdict)
 
-    self.debug.out('Done')
+    self.debug('Done')
     self.cache[self.title] = eps
     return eps
 
