@@ -1,6 +1,5 @@
 import re
 import os
-import string
 import urllib
 import json
 import socket
@@ -9,20 +8,23 @@ from datetime import datetime
 from ConfigParser import RawConfigParser
 
 class Debug:
-  def __init__(self, verbose=False):
+  def __init__(self, verbose=0):
     self.verbose = verbose
 
-  def out(self, string, tag):
-    if self.verbose:
-      print "[%s] %s - %s" % (datetime.now(), tag, string)
+  def out(self, message, tag, level=1):
+    if self.verbose >= level or level == -1:
+      print "[%s] %s - %s" % (datetime.now(), tag, message)
 
-  def info(self, string):
-    self.out(string, "INFO")
+  def info(self, message, level=1):
+    self.out(message, "INFO", level)
 
-  def warn(self, string):
-    self.out(string, "WARN")
+  def warn(self, message, level=1):
+    self.out(message, "WARN", level)
 
-class DefaultConfigParser(RawConfigParser):
+  def fatal(self, message):
+    self.output(message, "FATAL", -1)
+
+class DummyConfigParser(RawConfigParser):
   def __init__(self):
     RawConfigParser.__init__(self)
 
@@ -71,10 +73,113 @@ class EpGuidesParser(sgmllib.SGMLParser):
     self.epcsv = ''
     self.hyperlinks = []
 
+class DummySearcher:
+  def __init__(self):
+    pass
+
+  def get_episode_name(self, show, season, episode):
+    return '"Unknown episode of %s, S%02dE%02d"' % (show, int(season), int(episode))
+
+class EpGuidesSearcher:
+  def __init__(self, cache=None, debug=None):
+    # Search cache. Nested dictionary that stores ShowName -> Season mappings
+    # and Season maps to Episode and Title.
+    # Eg.
+    # {The Simpsons: 
+    #   {1:
+    #     {3:
+    #       "Homer's Odyssey"
+    #     }
+    #   }
+    # }
+    self.cache = cache
+    self.debug = debug
+
+    if self.cache is None:
+      self.cache = {}
+
+    if self.debug is None:
+      self.debug = Debug()
+
+  def get_episode_name(self, show, season, episode):
+    try:
+      ep = self.cache[show][season][episode]
+      self.debug.info("Returning episodes for %s from cache" % show)
+      return ep
+    except:
+      self.debug.info("%s is not cached, fetching from the internet" % show)
+
+    query = {"q": "allintitle: site:epguides.com %s" % show, "userip": socket.gethostbyname(socket.gethostname())}
+    search_url = "http://ajax.googleapis.com/ajax/services/search/web?v=1.0&%s" % urllib.urlencode(query)
+
+    self.debug.info("Searching at %s" % search_url)
+    search_results = json.loads(self._get_url_contents(search_url))
+
+    if search_results['responseStatus'] != 200 or 'estimatedResultCount' not in search_results['responseData']['cursor']:
+      self.debug.fatal("Show not found! Response details: %s" % search_results['responseDetails'])
+      return None
+
+    epguides_url = search_results['responseData']['results'][0]['url']
+    self.debug.info("Looking for CSV listing at %s" % epguides_url)
+
+    parser = EpGuidesParser()
+    parser.parse(self._get_url_contents(epguides_url))
+
+    try:
+      links = parser.get_hyperlinks()
+      csv_link = links[["exportToCSV" in link for link in links].index(True)]
+    except ValueError:
+      self.debug.fatal("Couldn't find CSV listing for %s at %s. Aborting." % (show, epguides_url))
+      return None
+
+    self.debug.info("Downloading show data for %s..." % show)
+    parser.reset_data()
+    parser.parse(self._get_url_contents(csv_link))
+
+    csv = parser.get_eps_csv()
+    if "" in csv:
+      csv.remove("")
+
+    eps = {}
+    for i in range(0, len(csv)):
+      if i == 0:
+        headers = csv[0].split(",")
+        continue
+      row = csv[i].split(",")
+      if len(row) < 2:
+        continue
+
+      rowdict = {}
+      for j in range(0, len(headers)):
+        rowdict[headers[j]] = row[j]
+
+      title = rowdict["title"]
+      try:
+        _season = int(rowdict["season"])
+        _episode = int(rowdict["episode"])
+      except ValueError:
+        self.debug.warn("Season or episode number are missing. Skipping this episode: %s" % rowdict["title"])
+        continue
+
+      if _season not in eps:
+        eps[_season] = {}
+      eps[_season][_episode] = title.replace('"', '')
+
+    self.debug.info("Done downloading data for %s" % show)
+    self.cache[show] = eps
+    return eps[season][episode]
+
+  def _get_url_contents(self, url):
+    page = urllib.urlopen(url)
+    results = page.read()
+    page.close()
+    return results
+
 class Automover:
-  def __init__(self, search_path='.', config=None, debug=None):
+  def __init__(self, search_path='.', config=None, searcher=None, debug=None):
     self.search_path = os.path.abspath(search_path)
     self.config = config
+    self.searcher = searcher
     self.debug = debug
 
     if self.debug is None:
@@ -82,9 +187,13 @@ class Automover:
 
     self.debug.info("Initializing...")
 
+    if self.searcher is None:
+      self.debug.warn("Episode searcher is empty, using dummy searcher")
+      self.searcher = DummySearcher()
+
     if self.config is None:
-      self.debug.warn("Config parser is empty, using default options")
-      self.config = DefaultConfigParser()
+      self.debug.warn("Config parser is empty, using dummy parser with default options")
+      self.config = DummyConfigParser()
 
     patterns = [p for p in self.config.options('patterns') if p.startswith('pattern')]
 
@@ -101,6 +210,12 @@ class Automover:
 
   def run(self):
     files = self._get_files()
+    self._rename(files)
+
+  def _rename(self, files):
+    for filename, show, season, episode, title in files:
+      new_title = "%s S%02dE%02d %s" % (show, season, episode, title)
+      self.debug.info('mv "%s" "%s"' % (filename, new_title))
 
   def _get_files(self):
     matched_files = []
@@ -115,8 +230,11 @@ class Automover:
           season = int(groups[1].lstrip("0"))
           episode = int(groups[2].lstrip("0"))
 
-          title = self._get_episode_name(show, season, episode)
-          self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, title))
+          ep_title = self.searcher.get_episode_name(show, season, episode)
+          full_path = os.path.join(root, filename)
+          matched_files.append((full_path, show, season, episode, ep_title))
+
+          self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, ep_title))
     return matched_files
 
   def _match(self, filename):
@@ -134,80 +252,12 @@ class Automover:
         return show
     return None
   
-  def _get_episode_name(self, title, season, episode):
-    query = {"q": "allintitle: site:epguides.com %s" % title, "userip": socket.gethostbyname(socket.gethostname())}
-    search_url = "http://ajax.googleapis.com/ajax/services/search/web?v=1.0&%s" % urllib.urlencode(query)
-
-    self.debug.info("Searching at %s" % search_url)
-
-    page = urllib.urlopen(search_url)
-    json_results = page.read()
-    results = json.loads(json_results)
-    page.close()
-
-    if results['responseStatus'] != 200 or 'estimatedResultCount' not in results['responseData']['cursor']:
-      self.debug.warn("Show not found! Response details: %s" % results['responseDetails'])
-      return None
-
-    epguides_url = results['responseData']['results'][0]['url']
-    self.debug.info("Looking for CSV listing at %s" % epguides_url)
-
-    page = urllib.urlopen(epguides_url)
-
-    parser = EpGuidesParser()
-    parser.parse(page.read())
-    page.close()
-
-    csv_link = None
-    for link in parser.get_hyperlinks():
-      if "exportToCSV" in link:
-        csv_link = link
-        break
-
-    if csv_link is None:
-      self.debug.warn("Couldn't find CSV listing for %s at %s. Aborting." % (self.title, epguides_url))
-      return None
-
-    self.debug.info("Downloading show data...")
-    page = urllib.urlopen(csv_link)
-    parser.reset_data()
-    parser.parse(page.read())
-    page.close()
-
-    csv = parser.get_eps_csv()
-    if "" in csv:
-      csv.remove("")
-
-    eps = {}
-    for i in range(0, len(csv)):
-      if i == 0:
-        headers = csv[0].split(",")
-        continue
-      row = csv[i].split(",")
-      if len(row) < 2:
-        continue
-      rowdict = {}
-
-      for j in range(0, len(headers)):
-        rowdict[headers[j]] = row[j]
-
-      try:
-        season = int(rowdict["season"])
-        episode = int(rowdict["episode"])
-      except ValueError:
-        self.debug.warn("Season or episode number are missing. Skipping this episode: %s" % rowdict["title"])
-        continue
-
-      title = rowdict["title"]
-
-      if season not in eps:
-        eps[season] = {}
-      eps[season][episode] = title
-
-    self.debug.info("Done downloading data")
-    return eps[season][episode]
-
 if __name__ == "__main__":
-  d = Debug(verbose=True)
-  a = Automover(debug=d)
+  d = Debug(verbose=1)
+  e = EpGuidesSearcher(debug=d)
+  a = Automover(searcher=e, debug=d)
   a.run()
+
+  import pickle
+  with open("cache_file.pyo", "w") as cache_file:
+    pickle.dump(e.cache, cache_file)
