@@ -173,7 +173,7 @@ class EpGuidesSearcher:
     return results
 
 class Automover:
-  def __init__(self, search_path='.', config, searcher, debug):
+  def __init__(self, search_path, config, searcher, debug):
     self.search_path = os.path.abspath(search_path)
     self.config      = config
     self.searcher    = searcher
@@ -195,31 +195,33 @@ class Automover:
 
   def run(self):
     files = self._get_files()
-    self._rename(files)
 
-  def _rename(self, files):
-    for filename, show, season, episode, title in files:
-      new_title = "%s S%02dE%02d %s" % (show, season, episode, title)
-      self.debug.info('mv "%s" "%s"' % (filename, new_title))
+    for src, dest in files:
+      self._rename(src, dest)
+
+  def _rename(self, src, dest):
+    self.debug.info('move "%s" to "%s"' % (src, dest))
 
   def _get_files(self):
     matched_files = []
     self.debug.info("Finding files in %s" % self.search_path)
+    destination_root = os.path.abspath(self.config.get('main', 'destination'))
     
-    for root, subs, files in os.walk('.'):
+    for root, subs, files in os.walk(self.search_path):
       for filename in files:
         match = self._match(filename)
         if match:
-          groups  = match.groups()
-          show    = self._get_show_name(groups[0])
-          season  = int(groups[1].lstrip("0"))
+          groups = match.groups()
+          show = self._get_show_name(groups[0])
+          season = int(groups[1].lstrip("0"))
           episode = int(groups[2].lstrip("0"))
-
-          ep_title  = self.searcher.get_episode_name(show, season, episode)
-          full_path = os.path.join(root, filename)
-          matched_files.append((full_path, show, season, episode, ep_title))
+          ep_title = self.searcher.get_episode_name(show, season, episode)
           self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, ep_title))
-
+          source_path = os.path.join(root, filename)
+          extension = filename.split('.')[-1]
+          new_title = "%s S%02dE%02d %s.%s" % (show, season, episode, ep_title, extension)
+          destination = os.path.join(destination_root, show, new_title)
+          matched_files.append((source_path, destination))
     return matched_files
 
   def _match(self, filename):
@@ -238,12 +240,15 @@ class Automover:
     return None
   
 if __name__ == "__main__":
+  import pickle
+  with open("cache_file.pyo", "r") as cache_file:
+    cache = pickle.load(cache_file)
+
   d = Debug(verbose=1)
   c = DummyConfigParser()
-  e = EpGuidesSearcher(debug=d)
-  a = Automover(config=c, searcher=e, debug=d)
+  e = EpGuidesSearcher(debug=d, cache=cache)
+  a = Automover(search_path='.', config=c, searcher=e, debug=d)
   a.run()
 
-  import pickle
   with open("cache_file.pyo", "w") as cache_file:
     pickle.dump(e.cache, cache_file)
