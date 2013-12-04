@@ -81,7 +81,7 @@ class DummySearcher:
     return '"Unknown episode of %s, S%02dE%02d"' % (show, int(season), int(episode))
 
 class EpGuidesSearcher:
-  def __init__(self, cache=None, debug=None):
+  def __init__(self, debug, cache=None):
     # Search cache. Nested dictionary that stores ShowName -> Season mappings
     # and Season maps to Episode and Title.
     # Eg.
@@ -97,9 +97,6 @@ class EpGuidesSearcher:
 
     if self.cache is None:
       self.cache = {}
-
-    if self.debug is None:
-      self.debug = Debug()
 
   def get_episode_name(self, show, season, episode):
     try:
@@ -176,24 +173,12 @@ class EpGuidesSearcher:
     return results
 
 class Automover:
-  def __init__(self, search_path='.', config=None, searcher=None, debug=None):
+  def __init__(self, search_path='.', config, searcher, debug):
     self.search_path = os.path.abspath(search_path)
-    self.config = config
-    self.searcher = searcher
-    self.debug = debug
-
-    if self.debug is None:
-      self.debug = Debug()
-
+    self.config      = config
+    self.searcher    = searcher
+    self.debug       = debug
     self.debug.info("Initializing...")
-
-    if self.searcher is None:
-      self.debug.warn("Episode searcher is empty, using dummy searcher")
-      self.searcher = DummySearcher()
-
-    if self.config is None:
-      self.debug.warn("Config parser is empty, using dummy parser with default options")
-      self.config = DummyConfigParser()
 
     patterns = [p for p in self.config.options('patterns') if p.startswith('pattern')]
 
@@ -225,16 +210,16 @@ class Automover:
       for filename in files:
         match = self._match(filename)
         if match:
-          groups = match.groups()
-          show = self._get_show_name(groups[0])
-          season = int(groups[1].lstrip("0"))
+          groups  = match.groups()
+          show    = self._get_show_name(groups[0])
+          season  = int(groups[1].lstrip("0"))
           episode = int(groups[2].lstrip("0"))
 
-          ep_title = self.searcher.get_episode_name(show, season, episode)
+          ep_title  = self.searcher.get_episode_name(show, season, episode)
           full_path = os.path.join(root, filename)
           matched_files.append((full_path, show, season, episode, ep_title))
-
           self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, ep_title))
+
     return matched_files
 
   def _match(self, filename):
@@ -254,8 +239,9 @@ class Automover:
   
 if __name__ == "__main__":
   d = Debug(verbose=1)
+  c = DummyConfigParser()
   e = EpGuidesSearcher(debug=d)
-  a = Automover(searcher=e, debug=d)
+  a = Automover(config=c, searcher=e, debug=d)
   a.run()
 
   import pickle
