@@ -190,17 +190,19 @@ class Automover:
     for show in os.listdir(self.config.get('main', 'destination')):
       self.show_list.append(show)
     self.debug.info("Saved list of %d shows" % len(self.show_list))
-
     self.debug.info("Done initializing")
 
   def run(self):
     files = self._get_files()
 
     for src, dest in files:
-      self._rename(src, dest)
+      self._move(src, dest)
 
-  def _rename(self, src, dest):
+  def _move(self, src, dest):
     self.debug.info('move "%s" to "%s"' % (src, dest))
+
+  def _rename(self, show, season, episode, episode_title, extension):
+    return "%s S%02dE%02d %s.%s" % (show, season, episode, episode_title, extension)
 
   def _get_files(self):
     matched_files = []
@@ -211,16 +213,26 @@ class Automover:
       for filename in files:
         match = self._match(filename)
         if match:
-          groups = match.groups()
-          show = self._get_show_name(groups[0])
-          season = int(groups[1].lstrip("0"))
-          episode = int(groups[2].lstrip("0"))
-          ep_title = self.searcher.get_episode_name(show, season, episode)
-          self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, ep_title))
+          # extract info from the regex match
+          groups      = match.groups()
+          show        = self._get_show_name(groups[0])
+          season      = int(groups[1].lstrip("0"))
+          episode     = int(groups[2].lstrip("0"))
+
+          # lookup the episode title online if needed
+          ep_title    = self.searcher.get_episode_name(show, season, episode)
           source_path = os.path.join(root, filename)
-          extension = filename.split('.')[-1]
-          new_title = "%s S%02dE%02d %s.%s" % (show, season, episode, ep_title, extension)
+
+          self.debug.info("%s is %s Season %s Episode %s %s" % (filename, show, season, episode, ep_title))
+
+          # construct the new name
+          extension   = filename.split('.')[-1]
+          new_title = self._rename(show, season, episode, ep_title, extension)
+
+          # find the full path of the new destination
           destination = os.path.join(destination_root, show, new_title)
+
+          # save the src and dest into a list for return later
           matched_files.append((source_path, destination))
     return matched_files
 
