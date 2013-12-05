@@ -1,12 +1,14 @@
+import ConfigParser
+import argparse
+import os
 import pickle
 import re
-import os
 import sys
-import argparse
-import ConfigParser
 from time import ctime
-from editDistance import editDistance
+
 from EpGuidesSearch import EpGuidesSearch
+from editDistance import editDistance
+
 
 class Debug:
   def __init__(self, verbose):
