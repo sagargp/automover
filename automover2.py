@@ -1,25 +1,9 @@
 import re
 import os
+import logging
 from datetime import datetime
 from parsers import *
 from searchers import *
-
-class Debug:
-  def __init__(self, verbose=0):
-    self.verbose = verbose
-
-  def out(self, message, tag, level=1):
-    if self.verbose >= level or level == -1:
-      print "[%s] %s - %s" % (datetime.now(), tag, message)
-
-  def info(self, message, level=1):
-    self.out(message, "INFO", level)
-
-  def warn(self, message, level=1):
-    self.out(message, "WARN", level)
-
-  def fatal(self, message):
-    self.output(message, "FATAL", -1)
 
 class Automover:
   def __init__(self, search_path, config, searcher, debug):
