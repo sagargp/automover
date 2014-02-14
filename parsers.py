@@ -22,8 +22,8 @@ class EpGuidesParser(sgmllib.SGMLParser):
   Parses an epguides.com TV show page and enables retrieving
   a CSV listing of all the episodes of the given show.
   """
-  def __init__(self, verbose=0):
-    sgmllib.SGMLParser.__init__(self, verbose)
+  def __init__(self):
+    sgmllib.SGMLParser.__init__(self)
     self.hyperlinks = []
     self.epcsv = ''
     self.inside_pre = 0
