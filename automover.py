@@ -24,11 +24,12 @@ class Automover:
 
     self.logger.info("Compiling regular expressions")
     self.patterns = [re.compile(self.config.get('patterns', p), flags=re.IGNORECASE) for p in patterns]
-    self.alnum_pattern = re.compile('[\W_]+')
+    self.exclude = re.compile(self.config.get('patterns', 'exclude'), flags=re.IGNORECASE)
 
     self.show_list = []
     for show in os.listdir(self.config.get('main', 'destination')):
       self.show_list.append(show)
+
     self.logger.info("Saved list of %d shows" % len(self.show_list))
     self.logger.info("Done initializing")
 
@@ -66,6 +67,7 @@ class Automover:
     for root, filename in full_list:
       match = self._match(filename)
       if match:
+        self.logger.info("Looking for %s" % filename)
         # extract info from the regex match
         groups  = match.groups()
         show    = self._get_show_name(groups[0])
@@ -90,6 +92,9 @@ class Automover:
     return matched_files
 
   def _match(self, filename):
+    if self.exclude.search(filename):
+      return None
+
     for pattern in self.patterns:
       search = pattern.search(filename)
       if search is not None:
