@@ -13,5 +13,5 @@ class DummyConfigParser(RawConfigParser):
 
     self.add_section('patterns')
     self.set('patterns', 'pattern_1', '(.*)s(\d+)e(\d+).*(mkv|avi|mp4)')
-    self.set('patterns', 'pattern_2', '(.*)\.?(\d{1,2})(\d\d).*(mkv|avi|mp4)')
+    self.set('patterns', 'pattern_2', '(.*)\.?(\d{1,2})x*(\d\d).*(mkv|avi|mp4)')
     self.set('patterns', 'exclude', '.*sample.*')
