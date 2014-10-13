@@ -1,9 +1,11 @@
 #!/usr/bin/python
-
 import re
 import os
 import logging
 import warnings
+import tvdb_api
+import tvdb_exceptions
+from collections import OrderedDict
 
 class File(object):
   def __init__(self, path, name):
@@ -56,26 +58,54 @@ class File(object):
 if __name__ == "__main__":
   import argparse
   parser = argparse.ArgumentParser()
+  parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print out debug info")
   parser.add_argument("path", action="store", help="The path to the root of all the files")
+  parser.add_argument("dest", action="store", help="The path to destination of the files")
   args = parser.parse_args()
 
   log = logging.getLogger(__name__)
-  logging.basicConfig(level=logging.DEBUG, format="%(levelname)s - %(message)s")
+  logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
   logging.captureWarnings(True)
 
+  if not args.verbose:
+    log.disabled = True
+
+  TVDB      = tvdb_api.Tvdb()
+  shopts    = OrderedDict()
   all_shows = {}
-  for dir in os.listdir(args.path):
-    f = File(args.path, dir).detect()
-    if f:
+  for _dir in os.listdir(args.path):
+    movie_file = File(args.path, _dir).detect()
+    if movie_file:
+      try: all_shows[movie_file.title].add(movie_file)
+      except: all_shows[movie_file.title] = set([movie_file])
+
+  for title, eps in all_shows.iteritems():
+    try:
+      results = TVDB.search(title.replace(".", " "))
+    except tvdb_exceptions.tvdb_shownotfound:
       try:
-        all_shows[f.title].add(f)
-      except:
-        all_shows[f.title] = set([f])
+        results = TVDB.search(title)
+      except tvdb_exceptions.tvdb_shownotfound:
+        log.warn("Show not found! Giving up. (%s)" % title)
+        continue
+    
+    if len(results) > 1:
+      log.warn("Multiple matches!")
 
-  log.info("-" * 20)
-  log.info("Summary")
-  log.info("-" * 20)
-
-  for show, eps in all_shows.iteritems():
+    proper_name = results[0]["seriesname"]
+    show = TVDB[proper_name]
     for ep in eps:
-      log.info("%s S%02dE%02d --> %s" % (ep.title.replace(".", " ").strip(), ep.season, ep.episode, ep.find_movie_file()))
+      try:
+        episode_name  = show[ep.season][ep.episode]["episodename"]
+        src_file      = os.path.join(args.path, ep._name, ep.find_movie_file())
+        dest_path     = os.path.join(args.dest, proper_name, "Season %d" % ep.season)
+        dest_filename = "%s S%02dE%02d %s%s" % (proper_name, ep.season, ep.episode, episode_name, os.path.splitext(src_file)[-1])
+
+        if not os.path.exists(dest_path):
+          shopts["mkdir -p %s" % dest_path] = None
+        shopts["cp %s %s" % (src_file, os.path.join(dest_path, dest_filename))] = None
+
+      except tvdb_exceptions.tvdb_episodenotfound:
+        log.warn("Episode not found! Giving up. (%s %d %d)" % (proper_name, ep.season, ep.episode))
+
+  print "\n".join(shopts.keys())
