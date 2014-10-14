@@ -60,8 +60,9 @@ if __name__ == "__main__":
   import argparse
   parser = argparse.ArgumentParser()
   parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print out debug info")
-  parser.add_argument("path", action="store", help="The path to the root of all the files")
-  parser.add_argument("dest", action="store", help="The path to destination of the files")
+  parser.add_argument("--force", action="store", help="Assume every file is the show given here")
+  parser.add_argument("path", action="store", help="The path to the root of all the files that need to be renamed")
+  parser.add_argument("dest", action="store", help="The path to destination of the files after they've been renamed")
   args = parser.parse_args()
 
   log = logging.getLogger(__name__)
@@ -77,11 +78,14 @@ if __name__ == "__main__":
   all_shows = {}
 
   shopts["cd \"%s\"" % args.path] = None
-  shopts["mkdir -p done"] = None
+  shopts["mkdir -p done"]         = None
 
   for _dir in os.listdir(args.path):
     movie_file = File(args.path, _dir).detect()
     if movie_file:
+      if args.force:
+        movie_file.title = args.force
+
       try: all_shows[movie_file.title].add(movie_file)
       except: all_shows[movie_file.title] = set([movie_file])
 
