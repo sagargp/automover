@@ -7,54 +7,124 @@ import tvdb_api
 import tvdb_exceptions
 from collections import OrderedDict
 
-class File(object):
+class EpisodeFileRepr(object):
   def __init__(self, path, name):
-    self._name    = name
-    self._path    = path
-    self._log     = logging.getLogger(__name__)
-    self.fullpath = os.path.join(path, name)
-    self.title    = None
-    self.season   = None
-    self.episode  = None
+    self._log       = logging.getLogger(__name__)
+    self._name      = name
+    self._path      = path
+    self._file_info = None
   
-  def detect(self):
+  def fetch_episode_name(self, tvdb_instance):
+    search_results = tvdb_instance.search(self._file_info["title"])
+    if not search_results:
+      raise tvdb_exceptions.tvdb_shownotfound, "Show not found! Giving up. (%s)" % self._file_info["name"]
+    if len(search_results) > 1:
+      log.warn("Multiple matches for %s:" % self._file_info["title"])
+      for result in search_results:
+        log.warn(" * %s" % result["seriesname"])
+      log.warn("Going with the first one, which is %s" % (search_results[0]["seriesname"]))
+    proper_name                    = search_results[0]["seriesname"]
+    self._file_info["title"]       = proper_name
+    self._file_info["episodename"] = tvdb_instance[proper_name][self._file_info["season"]][self._file_info["episode"]]["episodename"]
+  
+  def get_move_command(self, dest):
+    source        = self.find_movie_file()
+    dest_path     = os.path.join(dest, self._file_info["title"], "Season %d" % self._file_info["season"])
+    dest_filename = "%s%s" % (self._file_info["episodename"], os.path.splitext(source)[-1])
+    destination   = os.path.join(dest_path, dest_filename)
+    return 'cp -lbv "{source}" "{destination}"'.format(source=source, destination=destination)
+
+  def get_original_path(self):
+    return os.path.join(self._path, self._name)
+
+  def get_info(self):
+    if self._file_info:
+      return self._file_info
+
     m = re.match("([\w\.\s]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", self._name)
     if m: 
       title, season_group, s1, e1, s2, e2, _ = m.groups()
-      d = {"name": self._name, "title": title.replace(".", " ").strip(), "season": None, "episode": None}
+      self._file_info = {"name": self._name, "title": title.replace(".", " ").strip(), "season": None, "episode": None}
       if s1 and e1:
-        d["season"]  = int(s1)
-        d["episode"] = int(e1)
+        self._file_info["season"]  = int(s1)
+        self._file_info["episode"] = int(e1)
       elif s2 and e2:
-        d["season"]  = int(s2)
-        d["episode"] = int(e2)
-      self._log.info("{title} S{season:0>2d}E{episode:0>2d}".format(**d))
-      self.title   = d["title"]
-      self.season  = d["season"]
-      self.episode = d["episode"]
+        self._file_info["season"]  = int(s2)
+        self._file_info["episode"] = int(e2)
+      self._log.info(str(self))
+      return self._file_info
     else:
       warnings.warn("%s doesn't appear to be a valid TV show" % self._name)
       return None
-    return self
 
   def find_movie_file(self):
     path = os.path.join(self._path, self._name)
-    for f in os.listdir(path):
-      if f.endswith(("mkv", "avi", "mp4")) and "sample" not in f:
-        return f
+    if os.path.isdir(path):
+      for f in os.listdir(path):
+        if f.lower().endswith(("mkv", "avi", "mp4")) and "sample" not in f.lower():
+          return os.path.join(self._path, f)
+    else:
+      if path.lower().endswith(("mkv", "avi", "mp4")) and "sample" not in path.lower():
+        return path
     return None
 
   def __str__(self):
-    if self.title and self.season and self.episode:
-      d = {"title": self.title.replace(".", " ").strip(), "season": self.season, "episode": self.episode}
-      return "{title} S{season:0>2d}E{episode:0>2d}".format(**d)
-    return _name
+    if self._file_info:
+      try:
+        return "{title} S{season:0>2d}E{episode:0>2d} {episodename}".format(**self._file_info)
+      except:
+        return "{title} S{season:0>2d}E{episode:0>2d}".format(**self._file_info)
+    return None
 
   def __eq__(self, other):
-    return self.title == other.title and self.season == other.season and self.episode == other.episode
+    return self._file_info == other._file_info
 
   def __hash__(self):
     return  hash(str(self))
+
+def find_episode_files(path):
+  episodes = []
+  for f in os.listdir(path):
+    episode = EpisodeFileRepr(path, f)
+    episode.get_info()
+    if episode in episodes:
+      first = episodes.index(episode)
+      if os.stat(episodes[first].find_movie_file()).st_size > os.stat(episode.find_movie_file()).st_size:
+        continue
+    episodes.append(episode)
+  return episodes
+
+def main():
+  TVDB   = tvdb_api.Tvdb()
+  shopts = OrderedDict()
+
+  # commands
+  shopts['#!/bin/bash']         = None
+  shopts['cd "%s"' % args.path] = None
+
+  # get files
+  all_episodes = find_episode_files(args.path)
+
+  # get all the ep names from TVDB
+  for episode in all_episodes:
+    episode.fetch_episode_name(TVDB)
+    episode.moved = True
+
+  # generate move commands
+  for episode in all_episodes:
+    move_command = episode.get_move_command(args.dest)
+    shopts[move_command] = None
+  
+  # clean up
+  shopts['mkdir -p finished/']  = None
+  for episode in all_episodes:
+    try:
+      if episode.moved:
+        shopts['mv -v "%s" finished/' % episode.find_movie_file()] = None
+    except:
+      pass
+
+  print "\n".join(shopts.keys())
 
 if __name__ == "__main__":
   import argparse
@@ -72,62 +142,4 @@ if __name__ == "__main__":
   if not args.verbose:
     log.disabled = True
 
-  problems  = []
-  TVDB      = tvdb_api.Tvdb()
-  shopts    = OrderedDict()
-  all_shows = {}
-
-  shopts["cd \"%s\"" % args.path] = None
-  shopts["mkdir -p done"]         = None
-
-  for _dir in os.listdir(args.path):
-    movie_file = File(args.path, _dir).detect()
-    if movie_file:
-      if args.force:
-        movie_file.title = args.force
-
-      try: all_shows[movie_file.title].add(movie_file)
-      except: all_shows[movie_file.title] = set([movie_file])
-
-  for title, eps in all_shows.iteritems():
-    results = TVDB.search(title.replace(".", " "))
-    if len(results) == 0:
-      log.warn("Show not found! Giving up. (%s)" % title)
-      problems.append(eps.pop().fullpath)
-      continue
-
-    if len(results) > 1:
-      log.warn("Multiple matches for %s!" % title)
-      for result in results:
-        log.warn(" * %s" % result["seriesname"])
-      log.warn("Going with the first one, which is %s" % (results[0]["seriesname"]))
-
-    proper_name = results[0]["seriesname"]
-    show = TVDB[proper_name]
-    for ep in eps:
-      try:
-        episode_name  = show[ep.season][ep.episode]["episodename"]
-        src_file      = os.path.join(ep._name, ep.find_movie_file())
-        dest_path     = os.path.join(args.dest, proper_name, "Season %d" % ep.season)
-        dest_filename = "%s S%02dE%02d %s%s" % (proper_name, ep.season, ep.episode, episode_name, os.path.splitext(src_file)[-1])
-
-        if not os.path.exists(dest_path):
-          shopts["\nmkdir -p \"%s\"" % dest_path] = None
-        shopts["cp -lbv \"%s\" \"%s\"" % (src_file, os.path.join(dest_path, dest_filename))] = None
-        shopts["mv -v \"%s\" done" % ep._name] = None
-
-      except tvdb_exceptions.tvdb_episodenotfound:
-        log.warn("Episode not found! Giving up. (%s)" % (proper_name, ep.fullpath))
-        problems.append(title)
-      #except Exception, e:
-      #  log.warn("Unexpected error! (%s): %s" % (ep.fullpath, str(e)))
-      #  problems.append(ep.fullpath)
-
-  print "#!/bin/bash"
-  print
-  print "# Problem files:"
-  for f in problems:
-    print "#  * ", f
-
-  print
-  print "\n".join(shopts.keys())
+  main()
