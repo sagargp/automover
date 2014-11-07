@@ -55,12 +55,19 @@ class EpisodeFileRepr(object):
       title, season_group, s1, e1, s2, e2, _ = m.groups()
 
       if transform:
-        this, that = transform.split("=")
-        self._log.info("Transforming %s to %s..." % (this, that))
+        for transformation in transform:
+          try:
+            this, that = transformation.split("=")
+          except:
+            self._log.warn("Bad transformation string! Needs to be in A=B format.")
+            continue
 
-        new_title = title.replace(this, that)
-        self._log.info("%s became %s" % (title, new_title))
-        title = new_title
+          if this in title:
+            self._log.info("Transforming %s to %s..." % (this, that))
+
+            new_title = title.replace(this, that)
+            self._log.info("%s became %s" % (title, new_title))
+            title = new_title
 
       self._file_info = {"name": self._name, "title": title.replace(".", " ").strip(), "season": None, "episode": None}
       if s1 and e1:
@@ -142,11 +149,14 @@ if __name__ == "__main__":
   import argparse
   parser = argparse.ArgumentParser()
   parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print out debug info")
-  parser.add_argument("--transform", "-t", action="store", help="Must be in the form A=B. Transform A into B before doing TV show detection")
-  parser.add_argument("--cleanup-dir", "-c", action="store", help="Where to move the files after copying them to their destionation", default="./finished")
+  parser.add_argument("--transform", "-t", metavar="A=B", action="append", help="Transform A into B before doing TV show detection")
+  parser.add_argument("--cleanup-dir", "-c", metavar="DIR", action="store", help="Where to move the files after copying them to their destination", default="./finished")
   parser.add_argument("path", action="store", help="The path to the root of all the files that need to be renamed")
   parser.add_argument("dest", action="store", help="The path to destination of the files after they've been renamed")
   args = parser.parse_args()
+
+  logging.addLevelName(logging.WARNING, "\033[1;31mWARN\033[1;0m")
+  logging.addLevelName(logging.INFO, "\033[1;33mINFO\033[1;0m")
 
   log = logging.getLogger(__name__)
   logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
