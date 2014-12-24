@@ -129,8 +129,8 @@ def main(args):
           all_eps.append(e)
       else:
         all_eps.append(e)
-    except:
-      pass
+    except Exception as e:
+      log.warning(str(e))
 
   print "# move everything here after we're done"
   print 'mkdir -p "%s"' % args.cleanup_dir
