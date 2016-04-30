@@ -89,14 +89,32 @@ class EpisodeFileRepr(object):
         else:
             raise TypeError, "%s doesn't appear to be a valid TV show" % self._name
 
+    def _is_movie_file(self, filename):
+        lower = filename.lower()
+        acceptable_extensions = ["mkv", "avi", "mp4", "m4a"]
+        return "sample" not in lower and any([lower.endswith(ext) for ext in acceptable_extensions])
+
     def get_original_path(self):
+        """
+        Get the full file-system path for the actual video file for this
+        episode.
+        """
         path = os.path.join(self._path, self._name)
         self._log.info("Finding movie file for %s" % path)
 
         if os.path.isdir(path):
-            for f in os.listdir(path):
-                if f.lower().endswith(("mkv", "avi", "mp4")) and "sample" not in f.lower():
-                    return os.path.join(path, f)
+            vids = []
+            for subdir, subdirs, files in os.walk(path):
+                vid_files = filter(lambda f: self._is_movie_file(f), files)
+                for _vids in vid_files:
+                    vids.append(os.path.join(subdir, _vids))
+
+            if len(vids) > 1:
+                self._log.warn("Found more than one movie file! Just gonna go with the first one: {}".format(vids[0]))
+            elif len(vids) == 0:
+                raise RuntimeError("No video files found for {}".format(str(self)))
+
+            return vids[0]
         else:
             if path.lower().endswith(("mkv", "avi", "mp4")) and "sample" not in path.lower():
                 return path
