@@ -56,7 +56,7 @@ class EpisodeFileRepr(object):
             self._file_info["season"]][self._file_info["episode"]]["episodename"]
 
     def _get_info(self, transform=None):
-        m = re.match("([\w\.\s]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", self._name)
+        m = re.match("([\w\.\s]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", self._name, re.IGNORECASE)
         if m:
             title, season_group, s1, e1, s2, e2, _ = m.groups()
 
@@ -87,7 +87,7 @@ class EpisodeFileRepr(object):
                 self._file_info["episode"] = int(e2)
             return self._file_info
         else:
-            raise TypeError, "%s doesn't appear to be a valid TV show" % self._name
+            raise ValueError, "%s doesn't appear to be a valid TV show" % self._name
 
     def _is_movie_file(self, filename):
         lower = filename.lower()
