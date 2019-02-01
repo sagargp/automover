@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/home/sagar/workspace/automover/env/bin/python
 import re
 import os
 import logging
@@ -49,14 +49,18 @@ class EpisodeFileRepr(object):
             for result in search_results:
                 log.warn(" * %s" % result["seriesname"])
             log.warn("Going with the first one, which is %s" %
-                     (search_results[0]["seriesname"]))
-        proper_name = search_results[0]["seriesname"]
-        self._file_info["title"] = proper_name
-        self._file_info["episodename"] = tvdb_instance[proper_name][
-            self._file_info["season"]][self._file_info["episode"]]["episodename"]
+                     (search_results[0]["seriesName"]))
+        proper_name = search_results[0]["seriesName"]
+
+        try:
+            self._file_info["title"] = proper_name
+            self._file_info["episodename"] = tvdb_instance[proper_name][
+                self._file_info["season"]][self._file_info["episode"]]["episodename"]
+        except:
+            print 'failed on ', self._path
 
     def _get_info(self, transform=None):
-        m = re.match("([\w\.\s]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", self._name, re.IGNORECASE)
+        m = re.match("([\w\.\'\-\s]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", self._name, re.IGNORECASE)
         if m:
             title, season_group, s1, e1, s2, e2, _ = m.groups()
 
