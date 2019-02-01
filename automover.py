@@ -181,24 +181,18 @@ def main(args):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        default=False, help="Print out debug info")
-    parser.add_argument("--transform", "-t", metavar="A=B", action="append",
-                        help="Transform A into B before doing TV show detection")
-    parser.add_argument("--cleanup-dir", "-c", metavar="DIR", action="store",
-                        help="Where to move the files after copying them to their destination", default="./finished")
-    parser.add_argument(
-        "path", action="store", help="The path to the root of all the files that need to be renamed")
-    parser.add_argument(
-        "dest", action="store", help="The path to destination of the files after they've been renamed")
+    parser.add_argument("--verbose", "-v", action="store_true", default=False, help="Print out debug info")
+    parser.add_argument("--transform", "-t", metavar="A=B", action="append", help="Transform A into B before doing TV show detection")
+    parser.add_argument("--cleanup-dir", "-c", metavar="DIR", action="store", help="Where to move the files after copying them to their destination", default="./finished")
+    parser.add_argument("path", action="store", help="The path to the root of all the files that need to be renamed")
+    parser.add_argument("dest", action="store", help="The path to destination of the files after they've been renamed")
     args = parser.parse_args()
 
     logging.addLevelName(logging.WARNING, "\033[1;31mWARN\033[1;0m")
     logging.addLevelName(logging.INFO, "\033[1;33mINFO\033[1;0m")
 
     log = logging.getLogger(__name__)
-    logging.basicConfig(level=logging.INFO,
-                        format="%(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
     logging.captureWarnings(True)
 
     if not args.verbose:
