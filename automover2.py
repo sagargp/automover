@@ -1,9 +1,11 @@
 import pickle
 import logging
+import json
 import re
 import os
 import filetype
 import tvdb_api
+import traceback
 import shutil
 from collections import namedtuple
 from collections import defaultdict
@@ -18,10 +20,13 @@ def get_files(path, ignore):
             yield os.path.join(root, f)
 
 
-def is_video(path):
+def is_video(path, negative_search_re):
     try:
+        if negative_search_re.search(path):
+            return False
+
         return filetype.guess(path).mime.split('/')[0] == 'video'
-    except:
+    except Exception:
         return False
 
 
@@ -29,10 +34,10 @@ def get_extension(path):
     return filetype.guess(path).extension
 
 
-def get_episode(file):
+def get_episode(file, search_re, interactive):
     true_extension = get_extension(file)
 
-    search = re.search(r"([\w\.\'\-\s\?!\(\)]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", file, re.IGNORECASE)
+    search = search_re.search(file)
     if not search:
         logger.warning(f'Match failed for {file}')
         return None
@@ -52,22 +57,46 @@ def get_episode(file):
         return None
 
     try:
-        if title not in tvdb_cache:
-            tvdb_cache[title] = tvdb.search(title)
-        tvdb_result = tvdb_cache[title]
+        if title not in TVDB_CACHE:
+            TVDB_CACHE[title] = tvdb.search(title)
+        tvdb_result = TVDB_CACHE[title]
     except tvdb_api.tvdb_exception:
         logger.error(f'Series not found for "{title}"')
         return None
 
-    series_name = tvdb_result[0]['seriesName']
+    if len(tvdb_result) == 1:
+        tvdb_result, = tvdb_result
+    elif len(tvdb_result) > 1:
+        if interactive:
+            if title in CHOICES_CACHE:
+                choice = CHOICES_CACHE[title]
+            else:
+                logger.warning(f'More than one result found for {title}. Please choose the correct one:')
+                for idx, result in enumerate(tvdb_result):
+                    logger.warning(f'[{idx}] {result["seriesName"]}')
 
-    if len(tvdb_result) > 1:
-        logger.warning(f'More than one result found for {title}. Defaulting to the first one, which is: {series_name}')
+                while True:
+                    choice = input('Choose [0]: ')
+                    try:
+                        choice = int(choice)
+                        assert 0 <= choice < len(tvdb_result)
+                        break
+                    except:
+                        self.logger.warning(f'Invalid option. Please choose a number between 0 and {len(tvdb_result)-1}')
+                CHOICES_CACHE[title] = choice
+            tvdb_result = tvdb_result[choice]
+        else:
+            tvdb_result = [t for t in tvdb_result if t['network'] is not None]
+            logger.warning(f'More than one result found for {title}! Run in interactive mode to resolve.')
+            return None
+    series_name = tvdb_result['seriesName']
+    series_id = tvdb_result['id']
 
     try:
-        episode_name = tvdb[series_name][season][episode]['episodeName']
+        episode_name = tvdb[series_id][season][episode]['episodeName']
     except:
-        logger.error(f"Couldn't find episode {episode} ({series_name} season {season}) ")
+        logger.error(f"Couldn't find episode {episode} ({series_name} season {season}). Season details follow:")
+        logger.error(json.dumps(tvdb[series_id], indent=2))
         return None
 
     file_name = f'{series_name} S{season:02}E{episode:02} {episode_name}.{true_extension}'
@@ -82,12 +111,12 @@ def get_episode(file):
 def move(cleanup_dir, series_name, move_details, copy=False, dry_run=True):
     logger.info('----')
     logger.info(series_name)
-    dest_directory = move_details[0][1]
-    if not os.path.exists(dest_directory):
-        logger.info(f'Creating directory {dest_directory}')
-        os.makedirs(dest_directory, exist_ok=True)
 
-    for original_path, _, episode in move_details:
+    for original_path, dest_directory, episode in move_details:
+        if not os.path.exists(dest_directory):
+            logger.info(f'Creating directory {dest_directory}')
+            os.makedirs(dest_directory, exist_ok=True)
+
         new_path = os.path.join(dest_directory, episode.file_name)
 
         if copy:
@@ -101,7 +130,11 @@ def move(cleanup_dir, series_name, move_details, copy=False, dry_run=True):
             logger.info(f'  source........ "{original_path}"')
             logger.info(f'  destination... "{new_path}"')
             if not dry_run:
-                os.link(original_path, new_path)
+                try:
+                    os.link(original_path, new_path)
+                except:
+                    logger.warning(f'ERROR on {original_path}! Skipping')
+                    logger.warning(traceback.format_exc())
 
         cleaned_up_path = os.path.join(cleanup_dir, os.path.basename(original_path))
         logger.info(f' Moving "{original_path}" to "{cleaned_up_path}"')
@@ -109,18 +142,18 @@ def move(cleanup_dir, series_name, move_details, copy=False, dry_run=True):
             os.rename(original_path, cleaned_up_path)
 
 
-def run(cleanup_dir, path, dest, copy, dry_run):
+def run(cleanup_dir, path, dest, copy, dry_run, interactive, search_re, negative_search_re):
     files = get_files(path, ignore=cleanup_dir)
     moves = defaultdict(list)
     for file in files:
-        if not is_video(file):
+        if not is_video(file, negative_search_re):
             continue
 
-        episode = get_episode(file)
+        episode = get_episode(file, search_re, interactive)
         if not episode:
             continue
 
-        original_path = os.path.join(path, file)
+        original_path = file
         dest_directory = os.path.join(dest, episode.series_name, episode.directory_name)
         moves[episode.series_name].append((original_path, dest_directory, episode))
 
@@ -138,7 +171,9 @@ if __name__ == "__main__":
     parser.add_argument('--cleanup-dir', '-c', action='store', help='Where to move the files after copying them to their destination', default='./finished')
     parser.add_argument('--copy', '-L', action='store_true', help='Copy the file instead of doing a hard-link')
     parser.add_argument('--cache', '-x', action='store', default='/tmp', help='Cache file directory. Defaults to /tmp/')
+    parser.add_argument('--interactive', '-i', action='store_true', help='Interactively ask the user when multiple options exist')
     parser.add_argument('--dry-run', '-n', action='store_true', help="Don't do any file system operations")
+    parser.add_argument('--verbose', '-v', action='store_true', help="Verbose logging")
     parser.add_argument('path', action='store', help='The path to the root of all the files that need to be renamed')
     parser.add_argument('dest', action='store', help="The path to destination of the files after they've been renamed")
     args = parser.parse_args()
@@ -148,7 +183,9 @@ if __name__ == "__main__":
     logging.addLevelName(logging.INFO, "\033[1;0mINFO")
 
     logger = logging.getLogger(__name__)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(levelname)s [%(funcName)s():%(lineno)d] - %(message)s")
     logging.captureWarnings(True)
 
     Episode = namedtuple('Episode', 'file_name, series_name, directory_name, season, episode')
@@ -158,12 +195,15 @@ if __name__ == "__main__":
         logger.info('Running in dry-run mode. Nothing will actually be moved.')
 
     try:
-        with open(os.path.join(args.cache, 'tvdb_cache.pyo'), 'rb') as cache:
-            tvdb_cache = pickle.load(cache)
+        with open(os.path.join(args.cache, 'TVDB_CACHE.pyo'), 'rb') as cache:
+            TVDB_CACHE, CHOICES_CACHE = pickle.load(cache)
         logger.info('Loaded TVDB episode cache')
     except:
         logger.info('Failed to load cache.')
-        tvdb_cache = defaultdict(list)
+        TVDB_CACHE, CHOICES_CACHE = defaultdict(list), dict()
+
+    search_re = re.compile(r"([\w\.\'\-\s\?!\(\)]*)(S(\d+)E(\d+)|(\d+)x(\d+))(.*)", re.IGNORECASE)
+    negative_search_re = re.compile(r"(\.sub|\.idx|\.nfo|\.sfv|sample)", re.IGNORECASE)
 
     tvdb = tvdb_api.Tvdb()
     run(
@@ -171,12 +211,15 @@ if __name__ == "__main__":
         path=args.path,
         dest=args.dest,
         copy=args.copy,
-        dry_run=args.dry_run
+        dry_run=args.dry_run,
+        search_re=search_re,
+        negative_search_re=negative_search_re,
+        interactive=args.interactive
     )
 
     try:
-        with open(os.path.join(args.cache, 'tvdb_cache.pyo'), 'wb') as cache:
-            pickle.dump(tvdb_cache, cache)
+        with open(os.path.join(args.cache, 'TVDB_CACHE.pyo'), 'wb') as cache:
+            pickle.dump([TVDB_CACHE, CHOICES_CACHE], cache)
     except Exception as e:
         logger.error('Failed to write cache. TVDB episode data will be lost.')
         logger.error(e)

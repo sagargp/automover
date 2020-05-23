@@ -33,7 +33,7 @@ class EpisodeFileRepr(object):
             print 'mkdir -p "%s"' % dest_dir
         self._log.info("Moving %s to %s" % (og_path, dest_file))
 
-        print 'cp -blv "%s" "%s"' % (og_path, dest_file)
+        print 'cp -bv "%s" "%s"' % (og_path, dest_file)
 
         if cleanup:
             print 'mv -v "%s" "%s"' % (os.path.join(self._path, self._name), cleanup)
@@ -47,7 +47,8 @@ class EpisodeFileRepr(object):
         if len(search_results) > 1:
             log.warn("Multiple matches for %s:" % self._file_info["title"])
             for result in search_results:
-                log.warn(" * %s" % result["seriesname"])
+                log.warn(" * %s" % result["seriesName"])
+
             log.warn("Going with the first one, which is %s" %
                      (search_results[0]["seriesName"]))
         proper_name = search_results[0]["seriesName"]
